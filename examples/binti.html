@@ -14,7 +14,6 @@
  * TODOS
  * Fix exclusion/inclusion for tables with :: in them
  * toggle body of just highlighted node
- * deleting many nodes at once
  * list inclusions/exclusions on the top
  * add UI guide
  * integrate NextJS
@@ -30,6 +29,11 @@ function KeyPress(e) {
   if (evtobj.keyCode == 90 && evtobj.metaKey && evtobj.shiftKey) {
     history.forward()
   }
+
+  if (evtobj.key == 'Backspace') {
+    excludedNodes = [...excludedNodes, ...selectedNodes]
+    render()
+  }
 }
 
 document.onkeydown = KeyPress;
@@ -40,8 +44,9 @@ const urlSearchParams = new URLSearchParams(window.location.search);
 const params = Object.fromEntries(urlSearchParams.entries());
 
 let includeBody = params.includeBody === "true";
-let selectedNodes = params.selectedNodes ? params.selectedNodes.split(",") : [];
+let focusedNodes = params.focusedNodes ? params.focusedNodes.split(",") : [];
 let excludedNodes = params.excludedNodes ? params.excludedNodes.split(",") : [];
+let selectedNodes = [];
 let highlightedEdges = [];
 let highlightedNode = params.highlightedNode;
 
@@ -49,23 +54,25 @@ const nodeRegex = /\n(["\w:]+) \[([^}]|\n)+\}>\];/g;
 const edgeRegex = /\n *(["\w:]+) -> (["\w:]+).*/g;
 
 function toggleBody() {
-  redirect(selectedNodes, excludedNodes, !includeBody, highlightedNode);
+  // redirect(focusedNodes, excludedNodes, !includeBody, highlightedNode);
+  includeBody = !includeBody
+  render()
 }
 
-const redirect = (selectedNodes, excludedNodes, includeBody, highlightedNode) =>
+const redirect = (focusedNodes, excludedNodes, includeBody, highlightedNode) =>
   window.location.assign(
-    buildQueryString(selectedNodes, excludedNodes, includeBody, highlightedNode)
+    buildQueryString(focusedNodes, excludedNodes, includeBody, highlightedNode)
   );
 
 const buildQueryString = (
-  selectedNodes,
+  focusedNodes,
   excludedNodes,
   includeBody,
   highlightedNode
 ) =>
   "?" +
   Object.entries({
-    selectedNodes,
+    focusedNodes,
     excludedNodes,
     includeBody: [includeBody],
     highlightedNode: [highlightedNode],
@@ -138,24 +145,24 @@ ${edges.map((e) => e.value).join("\n")}
 }`;
 };
 
-const filterData = ({ nodes, edges }, selectedNodes, excludedNodes) => {
-  if (!selectedNodes.length) {
+const filterData = ({ nodes, edges }, focusedNodes, excludedNodes) => {
+  if (!focusedNodes.length) {
     return { nodes, edges };
   }
   const relatedEdges = edges.filter(
     (e) =>
-      (selectedNodes.includes(e.from) || selectedNodes.includes(e.to)) &&
+      (focusedNodes.includes(e.from) || focusedNodes.includes(e.to)) &&
       !(excludedNodes.includes(e.from) || excludedNodes.includes(e.to))
   );
   const relatedNodes = relatedEdges.map((e) =>
     [e.from, e.to].find(
-      (name) => !selectedNodes.includes(name) && !excludedNodes.includes(name)
+      (name) => !focusedNodes.includes(name) && !excludedNodes.includes(name)
     )
   );
 
   return {
     nodes: nodes.filter(
-      (n) => selectedNodes.includes(n.name) || !!relatedNodes.includes(n.name)
+      (n) => focusedNodes.includes(n.name) || !!relatedNodes.includes(n.name)
     ),
     edges: relatedEdges,
   };
@@ -163,13 +170,13 @@ const filterData = ({ nodes, edges }, selectedNodes, excludedNodes) => {
 
 const metaData = generateMetaData();
 
-const buildData = (selectedNodes, excludedNodes) => {
-  const selectedData = filterData(metaData, selectedNodes, excludedNodes);
+const buildData = (focusedNodes, excludedNodes) => {
+  const selectedData = filterData(metaData, focusedNodes, excludedNodes);
   return buildDot(selectedData);
 };
 
 function render() {
-  initApp(buildData(selectedNodes, excludedNodes));
+  initApp(buildData(focusedNodes, excludedNodes));
 }
 
 let graphviz = d3
@@ -227,9 +234,12 @@ function registerEventHandlers() {
   }
 
   nodes
-    .filter((x) => selectedNodes.includes(x.key))
+    .filter((x) => focusedNodes.includes(x.key))
     .attr("stroke-width", "2px");
 
+  nodes
+    .filter((x) => selectedNodes.includes(x.key))
+    .attr("fill", "lightgrey");
   // click outside of nodes
   // d3.select(document).on("click", function() { })
 
@@ -243,13 +253,23 @@ function registerEventHandlers() {
   nodes.on("click", function (event) {
     event.preventDefault();
     title = this.children[0].textContent;
-    if (!selectedNodes.includes(title)) {
-      selectedNodes.push(title);
-      // initApp(buildData(selectedNodes, excludedNodes))
-    } else {
-      highlightNode(title);
+    if (event.shiftKey) {
+      highlightNode(title)
+      return
     }
-    redirect(selectedNodes, excludedNodes, includeBody, highlightedNode);
+    else if (event.metaKey) {
+      selectedNodes.push(title);
+        render();
+      return;
+    }
+    else if (!focusedNodes.includes(title)) {
+      focusedNodes.push(title);
+      initApp(buildData(focusedNodes, excludedNodes))
+    } else {
+      focusedNodes = focusedNodes.filter(n => n !== title)
+    }
+    // render();
+    redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
   });
 
   // double-click on nodes
@@ -259,12 +279,12 @@ function registerEventHandlers() {
   nodes.on("contextmenu", function (event) {
     event.preventDefault();
     title = this.children[0].textContent;
-    if (selectedNodes.includes(title)) {
-      selectedNodes = selectedNodes.filter((n) => n != title);
+    if (focusedNodes.includes(title)) {
+      focusedNodes = focusedNodes.filter((n) => n != title);
     }
     excludedNodes.push(title);
-    redirect(selectedNodes, excludedNodes, includeBody, highlightedNode);
-    // initApp(buildData(selectedNodes, excludedNodes))
+    // redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
+    render()
   });
 
   // click and mousedown on edges
