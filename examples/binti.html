@@ -7,12 +7,12 @@
     <script src="../build/d3-graphviz.js"></script>
     <script src="../dotfiles/binti-schema.js"></script>
     <button onclick="toggleBody()">toggle body</button>
+    <button onclick="toggleDebugMode()">toggle debug mode</button>
     <div id="graph" style="text-align: center;"></div>
     <!-- <script src="./binti.js"> -->
 <script>
    /*
  * TODOS
- * Fix exclusion/inclusion for tables with :: in them
  * toggle body of just highlighted node
  * list inclusions/exclusions on the top
  * add UI guide
@@ -32,7 +32,8 @@ function KeyPress(e) {
 
   if (evtobj.key == 'Backspace') {
     excludedNodes = [...excludedNodes, ...selectedNodes]
-    render()
+
+    debugMode ? render() : redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
   }
 }
 
@@ -49,9 +50,14 @@ let excludedNodes = params.excludedNodes ? params.excludedNodes.split(",") : [];
 let selectedNodes = [];
 let highlightedEdges = [];
 let highlightedNode = params.highlightedNode;
+let debugMode = false;
 
 const nodeRegex = /\n(["\w:]+) \[([^}]|\n)+\}>\];/g;
 const edgeRegex = /\n *(["\w:]+) -> (["\w:]+).*/g;
+
+function toggleDebugMode () {
+  debugMode = !debugMode;
+}
 
 function toggleBody() {
   // redirect(focusedNodes, excludedNodes, !includeBody, highlightedNode);
@@ -82,20 +88,24 @@ const buildQueryString = (
     .map((kv) => kv.join("="))
     .join("&");
 
+const cleanString = s => {
+  return s && typeof s === "string" ? s.replaceAll('"','').trim() : s
+};
+
 const getEdgeMetaData = (node) => {
   const value = node.value;
   return {
-    value: value[0].trim(),
-    from: value[1].trim(),
-    to: value[2].trim(),
+    value: value[0],
+    from: cleanString(value[1]),
+    to: cleanString(value[2]),
   };
 };
 
 const getNodeMetaData = (node) => {
   const value = node.value;
   return {
-    value: value[0].trim(),
-    name: value[1].trim(),
+    value: value[0],
+    name: cleanString(value[1]),
   };
 };
 
@@ -268,8 +278,8 @@ function registerEventHandlers() {
     } else {
       focusedNodes = focusedNodes.filter(n => n !== title)
     }
-    // render();
-    redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
+
+    debugMode ? render() : redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
   });
 
   // double-click on nodes
@@ -283,8 +293,7 @@ function registerEventHandlers() {
       focusedNodes = focusedNodes.filter((n) => n != title);
     }
     excludedNodes.push(title);
-    // redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
-    render()
+    debugMode ? render() : redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
   });
 
   // click and mousedown on edges
