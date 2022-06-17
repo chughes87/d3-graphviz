@@ -13,7 +13,6 @@
 <script>
    /*
  * TODOS
- * toggle body of just highlighted node
  * list inclusions/exclusions on the top
  * add UI guide
  * integrate NextJS
@@ -35,6 +34,10 @@ function KeyPress(e) {
 
     debugMode ? render() : redirect(focusedNodes, excludedNodes, includeBody, highlightedNode);
   }
+
+  if (evtobj.key == 'Enter') {
+    selectedIncludes = selectedNodes
+  }
 }
 
 document.onkeydown = KeyPress;
@@ -47,6 +50,7 @@ const params = Object.fromEntries(urlSearchParams.entries());
 let includeBody = params.includeBody === "true";
 let focusedNodes = params.focusedNodes ? params.focusedNodes.split(",") : [];
 let excludedNodes = params.excludedNodes ? params.excludedNodes.split(",") : [];
+let selectedIncludes = []
 let selectedNodes = [];
 let highlightedEdges = [];
 let highlightedNode = params.highlightedNode;
@@ -150,7 +154,7 @@ label = "BintiFamily domain model\n\n"
 
   return `
 ${header}\n
-${includeBody ? nodes.map((n) => n.value).join("\n") : ""}
+${includeBody ? nodes.filter(n => selectedIncludes.length ? selectedIncludes.includes(n.name) : true).map((n) => n.value).join("\n") : ""}
 ${edges.map((e) => e.value).join("\n")}
 }`;
 };
